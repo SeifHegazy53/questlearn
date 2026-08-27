@@ -1,13 +1,14 @@
 # Testing Report
 
 What's actually been verified, and how — not a coverage aspiration.
-Current as of Module 10.2 (Domain Correctness: Mastery Evidence
-Gating), following Module 10 (Security, Accessibility, and Production
+Current as of Module 10.3 (Domain Correctness: Point-in-Time
+Assignment Roster Reporting), following Module 10.2 (Mastery Evidence
+Gating) and Module 10 (Security, Accessibility, and Production
 Hardening).
 
 ## Test suites
 
-- **Jest — unit + integration, `apps/api`**: 31 suites, 281 tests, run
+- **Jest — unit + integration, `apps/api`**: 32 suites, 288 tests, run
   against real Postgres/Redis (via `docker-compose`), not mocks, for
   every integration spec. Covers: auth session lifecycle, classes
   lifecycle + join-code race retry, questions lifecycle + versioning +
@@ -16,16 +17,20 @@ Hardening).
   (including the submit idempotency and frozen-content proofs),
   mastery evidence/recalculation (including its own idempotency proof,
   a recency-weighting test — newer evidence carries proportionally
-  greater influence than older evidence, not "decay" — and, as of
-  Module 10.2, the evidence/distinct-attempt-count gate's boundary
-  cases), gamification XP/badge awarding (including its own
-  idempotency proof), quest CRUD/gating/reward (including its own
-  concurrency proof, reworked in Module 10.2 to stage the "mastered"
-  gate across the now-required 3 distinct attempts instead of 1), all
-  four reporting endpoints against a hand-checkable fixture (plus CSV
-  formula-injection escaping), tenant isolation across every module
-  with resources to isolate, and rate limiting (auth + join-code
-  redemption + the app-wide default).
+  greater influence than older evidence, not "decay" — and the
+  evidence/distinct-attempt-count gate's boundary cases from Module
+  10.2), gamification XP/badge awarding (including its own idempotency
+  proof), quest CRUD/gating/reward (including its own concurrency
+  proof, reworked in Module 10.2 to stage the "mastered" gate across
+  the now-required 3 distinct attempts instead of 1), all four
+  reporting endpoints against a hand-checkable fixture (plus CSV
+  formula-injection escaping), point-in-time assignment roster
+  reporting as of Module 10.3 (leave→rejoin reconstruction, late-join
+  submissions, roster churn between assignments, all driven through
+  real HTTP join/leave/rejoin/assign/submit calls, in its own
+  `point-in-time-roster-reporting.integration.spec.ts`), tenant
+  isolation across every module with resources to isolate, and rate
+  limiting (auth + join-code redemption + the app-wide default).
 - **Jest — `apps/web`**: 3 tests, a render smoke test for the status
   page (loading/connected/degraded states).
 - **Playwright — `apps/web/e2e`**: 48 tests across 10 spec files,
@@ -190,6 +195,72 @@ production-code changes, since they only ever consumed the returned
   written before Docker was confirmed reachable — that was a
   documentation lag, not a case where the suites genuinely didn't
   run; this note reflects the actual, current, re-executed results.)
+
+## Module 10.3 — Point-in-Time Assignment Roster Reporting
+
+Domain-correctness fix: `assignedCount`/`submittedCount`/
+`completionRate` on the teacher dashboard and CSV export are now
+computed as of each assignment's own `createdAt` instant from the
+existing `RosterEntry.addedAt`/`removedAt` history, instead of from
+the class's current roster reused for every assignment regardless of
+age. No schema migration (see `docs/adr/0003-point-in-time-assignment-roster-reporting.md`
+for the full decision record, including the rejected
+`AssignmentRecipient` snapshot-table alternative).
+
+- **`reports.service.ts`**: `buildAssignmentRows` replaced the single
+  shared `activeRosterCount` query with one fetch of all `RosterEntry`
+  rows for the class (including removed ones) and one fetch of all
+  assignments-with-attempts, computing each assignment's point-in-time
+  cohort in application code — no N+1 query pattern. New field
+  `lateJoinSubmittedCount` on `AssignmentReportRow`, and a 5th CSV
+  column ("Late-Join Submissions").
+- **`reports.integration.spec.ts`**: the shared fixture's roster
+  entries were reordered to join BEFORE the assignment is created
+  (matching real usage — build a roster, then assign work to it) —
+  under the old always-current-roster logic the order never mattered,
+  but the new point-in-time logic correctly excludes anyone who joins
+  after an assignment already exists, so a fixture that joined
+  learners after assignment creation would now (correctly) report
+  `assignedCount: 0` for it. CSV header/assertions updated for the new
+  column.
+- **New `point-in-time-roster-reporting.integration.spec.ts`** (7 new
+  tests; the reports suite as a whole — this file plus
+  `reports.integration.spec.ts` and `report-formula.spec.ts` — is now
+  36 tests total): a dedicated fixture
+  driven entirely through real HTTP calls (join, teacher-remove,
+  rejoin, assign, start, submit — never hand-inserted roster or
+  assignment rows) proving: (1) a learner removed from the roster is
+  excluded from an assignment created during the gap, but included
+  again once they rejoin (a genuinely new `RosterEntry` row — asserted
+  directly: exactly 2 rows exist for that learner, one removed, one
+  active) and a later assignment is created; (2) the earlier
+  (during-the-gap) assignment's numbers are unaffected by the later
+  rejoin, proving each assignment's cohort is independently computed
+  from its own `createdAt`; (3) a learner who joins after an
+  assignment already exists can still submit it (unchanged —
+  `AttemptsService.start()` only checks current roster status), but
+  is excluded from `assignedCount`/`submittedCount` and captured in
+  `lateJoinSubmittedCount` instead, with `completionRate` staying
+  exactly 100% rather than inflating past it; (4) the CSV export
+  reflects the new column with the real, nonzero late-join count.
+- **Frontend**: `AssignmentReportRow` gained `lateJoinSubmittedCount`;
+  `apps/web/src/app/classes/[id]/report/page.tsx` shows a note only
+  when it's nonzero — the common case (no roster churn between
+  assignment creation and submission) is visually unchanged, verified
+  by the full Playwright suite still passing unmodified against the
+  seeded demo data (which has no late joiners).
+- **Verification**: real run, this session — `docker compose up -d`,
+  real production builds (`nest build`/`node dist/main.js`,
+  `next build`/`next start`), demo tenant reset and reseeded from
+  zero. `pnpm --filter @questlearn/api test`: **32 suites, 288 tests,
+  all pass**; `pnpm --filter @questlearn/web test`: **3/3 pass**;
+  `pnpm --filter @questlearn/web e2e` (Playwright, 48 tests): **48/48
+  pass**.
+- **Unrelated finding, logged as backlog, not fixed here**:
+  `Assignment.archivedAt` is dead — several read paths filter on
+  `archivedAt: null`, but no code anywhere ever sets it (unlike every
+  other archivable model in the schema, which all have a real archive
+  mutation). See ADR 0003's Consequences section.
 
 ## Known testing gaps
 

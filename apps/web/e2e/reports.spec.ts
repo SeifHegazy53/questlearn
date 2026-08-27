@@ -77,7 +77,7 @@ test.describe.serial("reports browser journey: class dashboard -> question analy
     const chunks: Buffer[] = [];
     for await (const chunk of stream!) chunks.push(chunk as Buffer);
     const content = Buffer.concat(chunks).toString("utf-8");
-    expect(content.split("\r\n")[0]).toBe("Assignment,Due Date,Assigned,Submitted,Completion Rate,Average Score");
+    expect(content.split("\r\n")[0]).toBe("Assignment,Due Date,Assigned,Submitted,Completion Rate,Average Score,Late-Join Submissions");
     expect(content).toContain(SEEDED_ACTIVITY_TITLE);
   });
 

@@ -17,6 +17,7 @@ interface AssignmentReportRow {
   dueAt: Date;
   assignedCount: number;
   submittedCount: number;
+  lateJoinSubmittedCount: number;
   completionRate: number | null;
   averageScore: number | null;
 }
@@ -35,34 +36,83 @@ export class ReportsService {
   // ---------------------------------------------------------------
 
   /**
-   * `assignedCount` uses the class's CURRENT active roster size for
-   * every assignment, including this class's older ones — a teacher
-   * reads "assigned" as "how many of my enrolled students should have
-   * done this," and no historical roster snapshot is tracked anywhere
-   * (`RosterEntry.removedAt` only marks removal, not "as of when").
-   * Documented as a known limitation rather than reconstructed.
+   * `assignedCount` is computed point-in-time (ADR 0003): a learner
+   * counts toward a given assignment's cohort only if some
+   * `RosterEntry` row for them covers the assignment's `createdAt`
+   * instant (`addedAt <= createdAt AND (removedAt IS NULL OR removedAt
+   * > createdAt)`), checked across ALL of that learner's roster rows —
+   * leaving and rejoining creates a new row rather than mutating the
+   * old one (no `@@unique([classId, userId])` on `RosterEntry`), so a
+   * learner can have several disjoint membership windows over time.
+   * `submittedCount` then counts only submissions from learners who
+   * were actually in that cohort, keeping `completionRate` ≤100% by
+   * construction; submissions from learners who joined after the
+   * assignment existed (still permitted — `AttemptsService.start()`
+   * only checks CURRENT roster status, unchanged here) are real and
+   * surfaced separately as `lateJoinSubmittedCount`, never silently
+   * dropped and never inflating the cohort's own rate.
+   *
+   * One query for all of a class's roster rows (including removed
+   * ones) and one for all assignments-with-attempts — the point-in-time
+   * cohort for every assignment is then computed in application code,
+   * not via a query per assignment (no N+1).
    */
   private async buildAssignmentRows(tenantId: string, classId: string): Promise<AssignmentReportRow[]> {
-    const activeRosterCount = await this.prisma.rosterEntry.count({ where: { classId, removedAt: null } });
+    const [rosterRows, assignments] = await Promise.all([
+      this.prisma.rosterEntry.findMany({ where: { classId }, select: { userId: true, id: true, addedAt: true, removedAt: true } }),
+      this.prisma.assignment.findMany({
+        where: { tenantId, classId, archivedAt: null },
+        orderBy: { createdAt: "asc" },
+        include: {
+          activity: { select: { title: true } },
+          attempts: { where: { status: "submitted" }, select: { learnerId: true, score: true } },
+        },
+      }),
+    ]);
 
-    const assignments = await this.prisma.assignment.findMany({
-      where: { tenantId, classId, archivedAt: null },
-      orderBy: { createdAt: "asc" },
-      include: {
-        activity: { select: { title: true } },
-        attempts: { where: { status: "submitted" }, select: { score: true } },
-      },
-    });
+    // Group roster rows by learner identity: a real account is
+    // deduped by userId (so leave->rejoin's two rows are checked
+    // together); a teacher-added placeholder (userId null) has no
+    // account to dedupe by, so each of its rows is its own identity —
+    // it can never itself be "the same learner rejoining."
+    const windowsByIdentity = new Map<string, { addedAt: Date; removedAt: Date | null }[]>();
+    for (const row of rosterRows) {
+      const identity = row.userId ?? `placeholder:${row.id}`;
+      const list = windowsByIdentity.get(identity) ?? [];
+      list.push({ addedAt: row.addedAt, removedAt: row.removedAt });
+      windowsByIdentity.set(identity, list);
+    }
+
+    const wasEnrolledAt = (identity: string, at: Date): boolean => {
+      const windows = windowsByIdentity.get(identity) ?? [];
+      return windows.some((w) => w.addedAt <= at && (w.removedAt === null || w.removedAt > at));
+    };
 
     return assignments.map((a) => {
-      const scores = a.attempts.map((r) => r.score).filter((s): s is number => s !== null);
+      const cohortIdentities = new Set(
+        Array.from(windowsByIdentity.keys()).filter((identity) => wasEnrolledAt(identity, a.createdAt)),
+      );
+
+      let submittedCount = 0;
+      let lateJoinSubmittedCount = 0;
+      const scores: number[] = [];
+      for (const attempt of a.attempts) {
+        if (attempt.score !== null) scores.push(attempt.score);
+        if (cohortIdentities.has(attempt.learnerId)) {
+          submittedCount += 1;
+        } else {
+          lateJoinSubmittedCount += 1;
+        }
+      }
+
       return {
         assignmentId: a.id,
         title: a.activity.title,
         dueAt: a.dueAt,
-        assignedCount: activeRosterCount,
-        submittedCount: a.attempts.length,
-        completionRate: completionRate(activeRosterCount, a.attempts.length),
+        assignedCount: cohortIdentities.size,
+        submittedCount,
+        lateJoinSubmittedCount,
+        completionRate: completionRate(cohortIdentities.size, submittedCount),
         averageScore: averageScore(scores),
       };
     });
@@ -148,6 +198,7 @@ export class ReportsService {
       { header: "Submitted", value: (r) => r.submittedCount },
       { header: "Completion Rate", value: (r) => this.formatPercent(r.completionRate) },
       { header: "Average Score", value: (r) => this.formatPercent(r.averageScore) },
+      { header: "Late-Join Submissions", value: (r) => r.lateJoinSubmittedCount },
     ];
 
     return toCsv(rows, columns);

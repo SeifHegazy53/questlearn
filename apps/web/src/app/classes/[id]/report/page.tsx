@@ -181,6 +181,12 @@ export default function ClassReportPage() {
                 <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
                   Due {formatDate(a.dueAt)} · {a.submittedCount}/{a.assignedCount} submitted
                 </p>
+                {a.lateJoinSubmittedCount > 0 && (
+                  <p data-testid="late-join-note" style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                    +{a.lateJoinSubmittedCount} submission{a.lateJoinSubmittedCount === 1 ? "" : "s"} from learner
+                    {a.lateJoinSubmittedCount === 1 ? "" : "s"} who joined after this was assigned (not counted above)
+                  </p>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <Badge tone="brand">{formatPercent(a.completionRate)} complete</Badge>

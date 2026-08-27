@@ -87,12 +87,11 @@ describe("reports (integration)", () => {
     await request(app.getHttpServer()).post(`/activities/${activityId}/questions`).set(teacherAuth()).send({ questionId: q2.body.id }).expect(201);
     await request(app.getHttpServer()).post(`/activities/${activityId}/publish`).set(teacherAuth()).expect(200);
 
-    const assignment = await request(app.getHttpServer())
-      .post("/assignments")
-      .set(teacherAuth())
-      .send({ classId, activityId, dueAt: new Date(Date.now() + 86400000).toISOString() })
-      .expect(201);
-    assignmentId = assignment.body.id;
+    // Roster is built BEFORE the assignment is created (Module 10.3 /
+    // ADR 0003: assignedCount is point-in-time as of the assignment's
+    // createdAt, so everyone meant to count toward it must already be
+    // enrolled when it's created) -- matching the realistic order
+    // anyway (a teacher builds a roster, then assigns work to it).
 
     // A placeholder roster entry (teacher-added, no account) -- counts
     // toward assignedCount but can never submit.
@@ -102,7 +101,6 @@ describe("reports (integration)", () => {
       .send({ name: "Never Registers", email: null })
       .expect(201);
 
-    // Learner A: both correct, and views the hint on Q1.
     const joinedA = await request(app.getHttpServer())
       .post("/classes/join")
       .send({ joinCode, name: "Learner A", email: `reports-a-${Date.now()}@example.com`, password: "learnerpassword123" })
@@ -110,6 +108,27 @@ describe("reports (integration)", () => {
     const authA = { Authorization: `Bearer ${joinedA.body.accessToken}` };
     learnerAId = joinedA.body.user.id;
 
+    const joinedB = await request(app.getHttpServer())
+      .post("/classes/join")
+      .send({ joinCode, name: "Learner B", email: `reports-b-${Date.now()}@example.com`, password: "learnerpassword123" })
+      .expect(200);
+    const authB = { Authorization: `Bearer ${joinedB.body.accessToken}` };
+
+    // Learner C joins but never starts the assignment -- counts toward
+    // assignedCount, never toward submittedCount.
+    await request(app.getHttpServer())
+      .post("/classes/join")
+      .send({ joinCode, name: "Learner C", email: `reports-c-${Date.now()}@example.com`, password: "learnerpassword123" })
+      .expect(200);
+
+    const assignment = await request(app.getHttpServer())
+      .post("/assignments")
+      .set(teacherAuth())
+      .send({ classId, activityId, dueAt: new Date(Date.now() + 86400000).toISOString() })
+      .expect(201);
+    assignmentId = assignment.body.id;
+
+    // Learner A: both correct, and views the hint on Q1.
     const startedA = await request(app.getHttpServer()).post(`/assignments/${assignmentId}/attempts/start`).set(authA).expect(200);
     aq1 = startedA.body.questions[0].activityQuestionId;
     aq2 = startedA.body.questions[1].activityQuestionId;
@@ -120,24 +139,11 @@ describe("reports (integration)", () => {
     scoreA = submittedA.body.score;
 
     // Learner B: Q1 wrong, Q2 correct.
-    const joinedB = await request(app.getHttpServer())
-      .post("/classes/join")
-      .send({ joinCode, name: "Learner B", email: `reports-b-${Date.now()}@example.com`, password: "learnerpassword123" })
-      .expect(200);
-    const authB = { Authorization: `Bearer ${joinedB.body.accessToken}` };
-
     const startedB = await request(app.getHttpServer()).post(`/assignments/${assignmentId}/attempts/start`).set(authB).expect(200);
     await request(app.getHttpServer()).patch(`/attempts/${startedB.body.id}/responses/${aq1}`).set(authB).send({ responseValue: "x" }).expect(200);
     await request(app.getHttpServer()).patch(`/attempts/${startedB.body.id}/responses/${aq2}`).set(authB).send({ responseValue: true }).expect(200);
     const submittedB = await request(app.getHttpServer()).post(`/attempts/${startedB.body.id}/submit`).set(authB).expect(200);
     scoreB = submittedB.body.score;
-
-    // Learner C joins but never starts the assignment -- counts toward
-    // assignedCount, never toward submittedCount.
-    await request(app.getHttpServer())
-      .post("/classes/join")
-      .send({ joinCode, name: "Learner C", email: `reports-c-${Date.now()}@example.com`, password: "learnerpassword123" })
-      .expect(200);
   });
 
   afterAll(async () => {
@@ -181,9 +187,12 @@ describe("reports (integration)", () => {
 
     const row = res.body.assignments[0];
     expect(row.title).toBe("Reports Activity");
-    // 4 roster entries: A, B, C, and the placeholder.
+    // 4 roster entries: A, B, C, and the placeholder -- all joined
+    // before the assignment existed, so the point-in-time cohort
+    // matches the full current roster here (no churn in this fixture).
     expect(row.assignedCount).toBe(4);
     expect(row.submittedCount).toBe(2);
+    expect(row.lateJoinSubmittedCount).toBe(0);
     expect(row.completionRate).toBeCloseTo(0.5);
     expect(row.averageScore).toBeCloseTo((scoreA + scoreB) / 2);
 
@@ -229,10 +238,13 @@ describe("reports (integration)", () => {
     expect(res.headers["content-disposition"]).toContain("attachment");
 
     const lines: string[] = res.text.trim().split("\r\n");
-    expect(lines[0]).toBe("Assignment,Due Date,Assigned,Submitted,Completion Rate,Average Score");
+    expect(lines[0]).toBe("Assignment,Due Date,Assigned,Submitted,Completion Rate,Average Score,Late-Join Submissions");
     const dataRow = lines.find((l) => l.startsWith("Reports Activity"));
     expect(dataRow).toBeDefined();
     expect(dataRow).toContain("4,2,50.0%");
+    // Late-Join Submissions is the trailing column; 0 here since no
+    // roster churn in this fixture.
+    expect(dataRow?.endsWith(",0")).toBe(true);
   });
 
   it("GET /activities/:id/report: per-question correctness, points, and hint-view rate", async () => {
