@@ -747,6 +747,7 @@ export interface AssignmentReportRow {
   dueAt: string;
   assignedCount: number;
   submittedCount: number;
+  lateJoinSubmittedCount: number;
   completionRate: number | null;
   averageScore: number | null;
 }
