@@ -76,3 +76,21 @@ requested from.
 Caveats: single demo tenant, small seeded dataset, light concurrency
 (40 requests in bursts of 5) — a feasibility measurement, not a load
 test.
+
+## Independent spot-check (fresh build + run, not the same container)
+
+Requested as a check on the original measurement before trusting it:
+a genuinely fresh `docker build` (new image ID, `b5e76b227dab`, not
+the original `9e898cb44554`) followed by a fresh `docker run`, watched
+live via `docker stats` every 5s for 87 seconds (more than a minute)
+while driving real traffic (teacher/learner login, dashboard, report,
+mastery pages) throughout — not idle. Raw output:
+`logs/spotcheck-docker-stats.csv`.
+
+Result: memory ranged **148.8 MiB → 154.3 MiB** (peak) → settled at
+152.6 MiB, i.e. **29.05% → 30.13% → 29.81%** of the 512 MB limit. CPU
+stayed at 0–0.37% throughout (light load, as expected). This lands
+squarely inside the original measurement's steady-state-under-load
+range (149.8–160.3 MB across the equivalent phases) — the spot-check
+confirms the original numbers, it doesn't just fail to contradict
+them.
