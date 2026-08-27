@@ -262,6 +262,71 @@ for the full decision record, including the rejected
   other archivable model in the schema, which all have a real archive
   mutation). See ADR 0003's Consequences section.
 
+## Module 10.4 — Zero-Cost Portfolio Deployment
+
+Full decision record: `docs/adr/0004-zero-cost-portfolio-deployment.md`.
+Memory feasibility for the combined single-container runtime was
+measured and independently spot-checked separately — see the
+`measurement/combined-runtime-poc` branch, not this module's own
+suite.
+
+- **`DemoModeGuard`**: unit-tested directly (`demo-mode.guard.spec.ts`
+  — path-exactness, all three mutating HTTP methods, the allowlist's
+  three exact routes, and that `/auth/register` is deliberately NOT
+  allowlisted) and proven end-to-end over real HTTP with `DEMO_MODE=true`
+  (`demo-mode.integration.spec.ts` — login/refresh/logout pass through,
+  POST/PATCH/DELETE to real routes 403 with the read-only message, GET
+  is never blocked), built with `DEMO_MODE` set before the app compiles
+  and restored afterward so it can't leak into other test files
+  sharing the same Jest worker.
+- **Session self-pruning**: `session-pruning.integration.spec.ts`
+  drives real register/verify/login HTTP calls, hand-inserts the
+  revoked/expired rows a login can't produce on demand, and proves a
+  subsequent login deletes only this user's own stale rows (a
+  still-valid session survives; another user's revoked session is
+  untouched). `auth.service.spec.ts`'s Prisma mock updated for
+  `issueSession`'s new array-form `$transaction`.
+- **`/health` 503/degraded**: `health.controller.spec.ts` (new) proves
+  the controller's status-code behavior specifically — 200 when
+  connected, 200 with `degraded:true` for Redis-only disconnection, a
+  503 `HttpException` carrying the full report body for database
+  disconnection. `health.service.spec.ts` extended for the `degraded`
+  field's computation.
+- **`Dockerfile.combined`**: built and run for real (not just
+  typechecked) — confirmed live: `tini` as PID 1 (`ps aux` inside the
+  running container), the proxy does not open its public port until
+  both `waitForReady()` checks resolve (logged, and a request against
+  the public port before that point would find nothing listening),
+  and killing the API child process took the whole container down
+  (exit code 1) rather than leaving the web process silently serving
+  behind a dead API.
+- **Full suite, real run this session**: `pnpm --filter @questlearn/api
+  test`: **36 suites, 309 tests, all pass** (up from 32/288 — this
+  module added `demo-mode.guard.spec.ts`, `demo-mode.integration.spec.ts`,
+  `session-pruning.integration.spec.ts`, `health.controller.spec.ts`).
+  `pnpm --filter @questlearn/web test`: **3/3 pass**. Both apps'
+  `tsc --noEmit`: clean. `pnpm --filter @questlearn/web e2e`
+  (Playwright, 48 tests, real production build, DEMO_MODE unset):
+  **48/48 pass** — confirms the new global guard and the layout-level
+  banner don't change behavior at all when demo mode is off. The
+  demo-mode web build was separately verified to actually render the
+  banner (`grep`-confirmed in the served HTML) before rebuilding
+  normally to restore the workspace's non-demo `.next` output.
+- **Frontend coverage note, not a gap silently left out**: `DemoModeAction`
+  wraps every control named in this module's brief (Create Class, Add
+  Question — shared by both create and edit via `QuestionForm`, Create
+  Activity, Assign, Edit, Archive) plus several more mutating controls
+  on the same pages while already there (activity question add/remove/
+  reorder/publish, class rename/roster add/remove/join-code rotate).
+  It does **not** yet cover every mutating control across the entire
+  app (e.g. concept tagging's `Select`/`Tag` controls on the question
+  detail page, quest step management, attempt start/submit) — those
+  remain safely blocked server-side by `DemoModeGuard` regardless
+  (defense in depth: the guard is the actual enforcement, the frontend
+  wrapper is a UX layer on top of it), just without the same
+  proactive "disabled, here's why" treatment yet. Worth a follow-up
+  pass if broader frontend coverage is wanted.
+
 ## Known testing gaps
 
 - **No production-scale load testing** — explicitly out of scope per

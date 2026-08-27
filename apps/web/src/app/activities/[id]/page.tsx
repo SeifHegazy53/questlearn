@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button } from "@questlearn/design-system";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import {
   ActivityDetail,
@@ -215,13 +216,17 @@ export default function ActivityBuilderPage() {
             </Link>
           )}
           {isDraft && (
-            <Button variant="primary" size="sm" onClick={onPublish} disabled={busy}>
-              Publish
-            </Button>
+            <DemoModeAction>
+              <Button variant="primary" size="sm" onClick={onPublish} disabled={busy}>
+                Publish
+              </Button>
+            </DemoModeAction>
           )}
-          <Button variant="ghost" size="sm" onClick={onArchive} disabled={busy}>
-            {activity.archivedAt ? "Archived" : "Archive"}
-          </Button>
+          <DemoModeAction>
+            <Button variant="ghost" size="sm" onClick={onArchive} disabled={busy}>
+              {activity.archivedAt ? "Archived" : "Archive"}
+            </Button>
+          </DemoModeAction>
         </div>
       </div>
 
@@ -294,20 +299,26 @@ export default function ActivityBuilderPage() {
               </div>
               {isDraft && (
                 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                  <Button variant="ghost" size="sm" onClick={() => onMove(index, -1)} disabled={busy || index === 0}>
-                    Up
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onMove(index, 1)}
-                    disabled={busy || index === activity.questions.length - 1}
-                  >
-                    Down
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onRemove(q.activityQuestionId)} disabled={busy}>
-                    Remove
-                  </Button>
+                  <DemoModeAction>
+                    <Button variant="ghost" size="sm" onClick={() => onMove(index, -1)} disabled={busy || index === 0}>
+                      Up
+                    </Button>
+                  </DemoModeAction>
+                  <DemoModeAction>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onMove(index, 1)}
+                      disabled={busy || index === activity.questions.length - 1}
+                    >
+                      Down
+                    </Button>
+                  </DemoModeAction>
+                  <DemoModeAction>
+                    <Button variant="ghost" size="sm" onClick={() => onRemove(q.activityQuestionId)} disabled={busy}>
+                      Remove
+                    </Button>
+                  </DemoModeAction>
                 </div>
               )}
             </div>
@@ -347,9 +358,11 @@ export default function ActivityBuilderPage() {
                     {q.currentVersion.prompt}
                   </span>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => onAdd(q.id)} disabled={busy}>
-                  Add
-                </Button>
+                <DemoModeAction>
+                  <Button variant="secondary" size="sm" onClick={() => onAdd(q.id)} disabled={busy}>
+                    Add
+                  </Button>
+                </DemoModeAction>
               </div>
             ))}
           </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input } from "@questlearn/design-system";
 import { FormField } from "@/components/FormField";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createClass } from "@/lib/api";
 
@@ -86,9 +87,11 @@ export default function NewClassPage() {
           <Input id="name" name="name" value={name} onChange={setName} placeholder="Period 3 Math" />
         </FormField>
 
-        <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-          {submitting ? "Creating…" : "Create class"}
-        </Button>
+        <DemoModeAction>
+          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+            {submitting ? "Creating…" : "Create class"}
+          </Button>
+        </DemoModeAction>
       </form>
 
       <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 18 }}>

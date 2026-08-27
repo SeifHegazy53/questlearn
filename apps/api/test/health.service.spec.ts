@@ -79,8 +79,33 @@ describe("HealthService", () => {
       api: "connected",
       database: "connected",
       redis: "connected",
+      degraded: false,
       environment: "test",
     });
     expect(typeof report.timestamp).toBe("string");
+  });
+
+  it("reports degraded:true when redis is disconnected but the database is not", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockPing.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const report = await service.getReport();
+
+    expect(report.database).toBe("connected");
+    expect(report.redis).toBe("disconnected");
+    expect(report.degraded).toBe(true);
+  });
+
+  it("still reports degraded:true when both the database and redis are disconnected (degraded tracks redis specifically; the controller escalates database outages to 503 separately)", async () => {
+    mockQuery.mockRejectedValueOnce(new Error("connection refused"));
+    mockPing.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const report = await service.getReport();
+
+    expect(report.database).toBe("disconnected");
+    // degraded is specifically the "redis-only" signal; a database
+    // outage is a strictly worse condition the controller escalates
+    // to 503 regardless of this flag's value.
+    expect(report.degraded).toBe(true);
   });
 });

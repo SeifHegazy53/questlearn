@@ -1,0 +1,63 @@
+# Production single-container image (ADR 0004): Next.js standalone +
+# NestJS + a small /backend-prefix reverse proxy, all owned by one
+# Render free Docker web service. Hardened version of the
+# measurement-only Dockerfile.combined-measurement (see the
+# `measurement/combined-runtime-poc` branch for the feasibility data
+# this design is based on) -- same routing logic, plus `tini` as
+# ENTRYPOINT, readiness-gated proxy startup, and exit-on-child-death,
+# none of which the measurement POC needed.
+#
+# Build context is the repo root: `docker build -f Dockerfile.combined .`
+#
+# The API and web app each keep their own self-contained root
+# (/app/api, /app/web) exactly mirroring what apps/api/Dockerfile and
+# apps/web/Dockerfile already copy for their standalone single-app
+# images -- just nested one directory deeper, so their independently
+# resolved node_modules never collide.
+
+FROM node:24-alpine AS base
+RUN apk add --no-cache libc6-compat openssl tini
+RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
+WORKDIR /app
+
+FROM base AS build
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time
+# (Next.js convention), so they're build ARGs, not runtime env vars --
+# a container built for one origin/mode can't be repointed without
+# rebuilding. /backend matches the proxy's own strip-and-forward rule
+# in docker/proxy.js exactly.
+ARG NEXT_PUBLIC_API_URL=/backend
+ARG NEXT_PUBLIC_DEMO_MODE=false
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE
+ENV DOCKER_BUILD=1
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @questlearn/api exec prisma generate
+RUN pnpm --filter @questlearn/api build
+RUN pnpm --filter @questlearn/web build
+
+FROM base AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+
+# --- NestJS API, self-contained under /app/api (mirrors apps/api/Dockerfile) ---
+COPY --from=build /app/apps/api/dist ./api/apps/api/dist
+COPY --from=build /app/apps/api/package.json ./api/apps/api/package.json
+COPY --from=build /app/apps/api/node_modules ./api/apps/api/node_modules
+COPY --from=build /app/packages/config/dist ./api/packages/config/dist
+COPY --from=build /app/packages/config/package.json ./api/packages/config/package.json
+COPY --from=build /app/packages/config/node_modules ./api/packages/config/node_modules
+COPY --from=build /app/node_modules ./api/node_modules
+
+# --- Next.js standalone, self-contained under /app/web (mirrors apps/web/Dockerfile) ---
+COPY --from=build /app/apps/web/.next/standalone ./web
+COPY --from=build /app/apps/web/.next/static ./web/apps/web/.next/static
+
+# --- reverse proxy + process supervisor ---
+COPY docker/package.json ./docker/package.json
+RUN cd docker && npm install --omit=dev
+COPY docker/proxy.js docker/entrypoint.js ./docker/
+
+EXPOSE 10000
+ENTRYPOINT ["tini", "--", "node", "docker/entrypoint.js"]

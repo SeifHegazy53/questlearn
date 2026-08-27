@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Select } from "@questlearn/design-system";
 import { FormField } from "@/components/FormField";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import {
   ActivityDetail,
@@ -192,9 +193,11 @@ export default function AssignActivityPage() {
                 style={{ height: 40, padding: "0 12px", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)", fontFamily: "var(--font-ui)", fontSize: 14 }}
               />
             </FormField>
-            <Button type="submit" variant="primary" size="md" disabled={submitting}>
-              {submitting ? "Assigning…" : "Assign"}
-            </Button>
+            <DemoModeAction>
+              <Button type="submit" variant="primary" size="md" disabled={submitting}>
+                {submitting ? "Assigning…" : "Assign"}
+              </Button>
+            </DemoModeAction>
           </form>
         </>
       )}

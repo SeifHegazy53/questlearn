@@ -1,0 +1,64 @@
+name: Release
+
+# Module 10.4 / ADR 0004, Option B: runs prisma migrate deploy against
+# the production Neon database from CI's own (free) compute, then
+# triggers a Render deploy -- Render's own pre-deploy-command feature
+# is confirmed paid-plan-only, unavailable on the free tier this whole
+# deployment is built around.
+#
+# Gated on the CI workflow completing successfully on main first --
+# "tests must pass" and "schema must migrate cleanly" are both
+# required gates in front of every production deploy, neither
+# skippable. workflow_run (not push) so this can't fire on a commit
+# CI hasn't actually finished evaluating yet.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  migrate-and-deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (exact commit CI just passed)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @questlearn/api prisma:generate
+
+      - name: Run production migrations (Neon)
+        run: pnpm --filter @questlearn/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      - name: Trigger Render deploy
+        # Render's deploy hook is a plain POST URL with no auth beyond
+        # the URL itself being a secret -- a successful migration is
+        # what unlocks the deploy, not the other way around, since a
+        # deploy against an un-migrated schema is the exact failure
+        # mode this ordering avoids.
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Render deploy hook returned HTTP $status"
+            exit 1
+          fi
+          echo "Render deploy triggered (HTTP $status)"

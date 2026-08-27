@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Select, Tabs, Tag } from "@questlearn/design-system";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import {
   ApiError,
@@ -284,9 +285,11 @@ export default function QuestionDetailPage() {
               Edit
             </Button>
           </Link>
-          <Button variant="ghost" size="sm" onClick={onArchive}>
-            {question.archivedAt ? "Un-archive" : "Archive"}
-          </Button>
+          <DemoModeAction>
+            <Button variant="ghost" size="sm" onClick={onArchive}>
+              {question.archivedAt ? "Un-archive" : "Archive"}
+            </Button>
+          </DemoModeAction>
         </div>
       </div>
 

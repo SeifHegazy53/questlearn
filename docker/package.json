@@ -1,0 +1,9 @@
+{
+  "name": "questlearn-combined-runtime",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Production process supervisor + reverse proxy for the single-container Render deployment (ADR 0004). Not a workspace member -- installed standalone in Dockerfile.combined.",
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

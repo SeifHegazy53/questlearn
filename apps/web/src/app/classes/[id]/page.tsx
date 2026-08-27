@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Button, Input } from "@questlearn/design-system";
 import { FormField } from "@/components/FormField";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import {
   ApiError,
@@ -198,9 +199,11 @@ export default function ClassDetailPage() {
         {editingName ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1, maxWidth: 420 }}>
             <Input id="rename" value={nameDraft} onChange={setNameDraft} />
-            <Button variant="primary" size="sm" onClick={saveName}>
-              Save
-            </Button>
+            <DemoModeAction>
+              <Button variant="primary" size="sm" onClick={saveName}>
+                Save
+              </Button>
+            </DemoModeAction>
             <Button variant="secondary" size="sm" onClick={() => { setEditingName(false); setNameDraft(cls.name); }}>
               Cancel
             </Button>
@@ -230,9 +233,11 @@ export default function ClassDetailPage() {
               Report
             </Button>
           </Link>
-          <Button variant="ghost" size="sm" onClick={toggleArchive}>
-            {cls.archivedAt ? "Un-archive" : "Archive"}
-          </Button>
+          <DemoModeAction>
+            <Button variant="ghost" size="sm" onClick={toggleArchive}>
+              {cls.archivedAt ? "Un-archive" : "Archive"}
+            </Button>
+          </DemoModeAction>
         </div>
       </div>
 
@@ -261,9 +266,11 @@ export default function ClassDetailPage() {
           <Button variant="secondary" size="sm" onClick={onCopyJoinLink}>
             {linkCopied ? "Link copied" : "Copy join link"}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onRotateJoinCode}>
-            Rotate code
-          </Button>
+          <DemoModeAction>
+            <Button variant="secondary" size="sm" onClick={onRotateJoinCode}>
+              Rotate code
+            </Button>
+          </DemoModeAction>
         </div>
         {linkCopyFailed && (
           <div style={{ marginTop: 12 }}>
@@ -318,9 +325,11 @@ export default function ClassDetailPage() {
                     <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)" }}>{entry.email}</p>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => onRemoveRoster(entry.id)}>
-                  Remove
-                </Button>
+                <DemoModeAction>
+                  <Button variant="ghost" size="sm" onClick={() => onRemoveRoster(entry.id)}>
+                    Remove
+                  </Button>
+                </DemoModeAction>
               </li>
             ))}
           </ul>
@@ -333,9 +342,11 @@ export default function ClassDetailPage() {
           <FormField label="Email (optional)" htmlFor="roster-email" error={rosterErrors.email}>
             <Input id="roster-email" type="email" value={rosterEmail} onChange={setRosterEmail} placeholder="avery@example.com" />
           </FormField>
-          <Button type="submit" variant="primary" size="md" disabled={rosterSubmitting}>
-            {rosterSubmitting ? "Adding…" : "Add"}
-          </Button>
+          <DemoModeAction>
+            <Button type="submit" variant="primary" size="md" disabled={rosterSubmitting}>
+              {rosterSubmitting ? "Adding…" : "Add"}
+            </Button>
+          </DemoModeAction>
         </form>
       </section>
     </main>

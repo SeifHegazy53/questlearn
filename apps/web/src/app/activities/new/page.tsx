@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input } from "@questlearn/design-system";
 import { FormField } from "@/components/FormField";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createActivity } from "@/lib/api";
 
@@ -85,9 +86,11 @@ export default function NewActivityPage() {
           <Input id="title" name="title" value={title} onChange={setTitle} placeholder="Unit 3 review quiz" />
         </FormField>
 
-        <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-          {submitting ? "Creating…" : "Create activity"}
-        </Button>
+        <DemoModeAction>
+          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+            {submitting ? "Creating…" : "Create activity"}
+          </Button>
+        </DemoModeAction>
       </form>
 
       <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 18 }}>

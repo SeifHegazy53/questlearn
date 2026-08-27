@@ -228,14 +228,34 @@ export class AuthService {
     const refreshToken = generateToken();
     const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-    await this.prisma.session.create({
-      data: {
-        tenantId,
-        userId,
-        refreshTokenHash: hashToken(refreshToken),
-        expiresAt: refreshTokenExpiresAt,
-      },
-    });
+    // Module 10.4 / ADR 0004: self-pruning instead of a scheduled
+    // cleanup job (Render Cron Jobs are paid-only, unavailable at the
+    // $0 constraint this deployment is built around). Every login and
+    // every refresh-rotation (refresh() below revokes the old row and
+    // calls back into issueSession) is a natural opportunity to sweep
+    // this same user's own trail of already-revoked/expired sessions,
+    // so no scheduler is needed to keep growth bounded. Unconditional
+    // -- not gated behind DEMO_MODE -- since bounded session growth is
+    // a general correctness improvement, not a demo-only concern.
+    // Scoped to `userId` only (not tenant-wide): each login only ever
+    // touches its own user's rows, never another learner's or
+    // teacher's session history.
+    await this.prisma.$transaction([
+      this.prisma.session.deleteMany({
+        where: {
+          userId,
+          OR: [{ revokedAt: { not: null } }, { expiresAt: { lt: new Date() } }],
+        },
+      }),
+      this.prisma.session.create({
+        data: {
+          tenantId,
+          userId,
+          refreshTokenHash: hashToken(refreshToken),
+          expiresAt: refreshTokenExpiresAt,
+        },
+      }),
+    ]);
 
     return {
       accessToken,

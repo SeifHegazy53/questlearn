@@ -14,7 +14,32 @@ project licensed under the MIT License.
 The full product and engineering plan lives in
 [`QuestLearn_Master_Spec.md`](./QuestLearn_Master_Spec.md).
 
-**Contents:** [Status](#status) · [Architecture](#architecture) ·
+## Live Demo
+
+**[<demo URL — to be filled in once Render/Neon/Upstash are provisioned>](#)**
+
+This is a **read-only public demo**, running on Render's free tier
+(see [ADR 0004](./docs/adr/0004-zero-cost-portfolio-deployment.md) for
+the full zero-cost deployment design). A few things worth knowing
+before you click around:
+
+- **Cold starts.** Render's free tier spins the instance down after a
+  period of inactivity — the first request after a while can take
+  10–30+ seconds while it wakes back up. Subsequent requests are fast.
+  This is a known, disclosed limitation of the free tier, not a bug.
+- **Sign in with the seeded demo accounts** shown on the login page
+  (one teacher, one learner) — self-registration and joining a class
+  as a new learner are both disabled in the demo.
+- **Everything is read-only.** Creating, editing, archiving, assigning,
+  and submitting are all disabled — you'll see the relevant buttons
+  greyed out with an explanation, or (server-side, the actual
+  enforcement) get a clear `403` if you try to hit the API directly.
+  Every browsing flow — classes, questions, activities, mastery,
+  reports, XP, quests — works exactly as it would for a real user.
+- Want to try the full read/write app? Clone the repo and run it
+  locally — see [Setup](#setup-clean-machine) below.
+
+**Contents:** [Live Demo](#live-demo) · [Status](#status) · [Architecture](#architecture) ·
 [Diagrams](#diagrams) · [Setup](#setup-clean-machine) ·
 [Module 1 — Authentication](#module-1--authentication) ·
 [Module 2 — Classes](#module-2--classes) ·
