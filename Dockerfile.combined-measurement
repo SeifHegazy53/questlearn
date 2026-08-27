@@ -1,0 +1,53 @@
+# Combined-runtime feasibility measurement image (Next.js standalone +
+# NestJS + a small reverse proxy in one container). NOT wired into
+# CI/CD, NOT the real deployment artifact -- exists only to measure
+# real memory/CPU against Render's Free instance limits. Build context
+# is the repo root: `docker build -f Dockerfile.combined-measurement .`
+#
+# The API and web app each keep their own self-contained root
+# (/app/api, /app/web) exactly mirroring what apps/api/Dockerfile and
+# apps/web/Dockerfile already copy for their standalone single-app
+# images -- just nested one directory deeper, so their node_modules
+# never collide -- rather than trying to merge two independently
+# resolved dependency trees into one /app root.
+
+FROM node:24-alpine AS base
+RUN apk add --no-cache libc6-compat openssl
+RUN corepack enable && corepack prepare pnpm@11.20.0 --activate
+WORKDIR /app
+
+FROM base AS build
+ARG NEXT_PUBLIC_API_URL=/backend
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV DOCKER_BUILD=1
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @questlearn/api exec prisma generate
+RUN pnpm --filter @questlearn/api build
+RUN pnpm --filter @questlearn/web build
+
+FROM base AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+
+# --- NestJS API, self-contained under /app/api (mirrors apps/api/Dockerfile) ---
+COPY --from=build /app/apps/api/dist ./api/apps/api/dist
+COPY --from=build /app/apps/api/package.json ./api/apps/api/package.json
+COPY --from=build /app/apps/api/node_modules ./api/apps/api/node_modules
+COPY --from=build /app/packages/config/dist ./api/packages/config/dist
+COPY --from=build /app/packages/config/package.json ./api/packages/config/package.json
+COPY --from=build /app/packages/config/node_modules ./api/packages/config/node_modules
+COPY --from=build /app/node_modules ./api/node_modules
+
+# --- Next.js standalone, self-contained under /app/web (mirrors apps/web/Dockerfile) ---
+COPY --from=build /app/apps/web/.next/standalone ./web
+COPY --from=build /app/apps/web/.next/static ./web/apps/web/.next/static
+
+# --- small reverse proxy + process supervisor ---
+COPY render-poc/proxy/package.json ./render-poc/proxy/package.json
+RUN cd render-poc/proxy && npm install --omit=dev
+COPY render-poc/proxy/index.js ./render-poc/proxy/index.js
+COPY render-poc/entrypoint.js ./entrypoint.js
+
+EXPOSE 8080
+CMD ["node", "entrypoint.js"]
