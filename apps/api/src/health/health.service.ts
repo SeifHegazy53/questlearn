@@ -11,6 +11,12 @@ export interface HealthReport {
   api: "connected";
   database: DependencyStatus;
   redis: DependencyStatus;
+  // Module 10.4 / ADR 0004: true whenever redis is disconnected but
+  // the database is not -- the controller still returns 200 for this
+  // case (Redis backs rate limiting, not core request correctness),
+  // but callers that only inspect the body (not the status code) can
+  // still tell degraded from fully healthy.
+  degraded: boolean;
   environment: string;
   timestamp: string;
 }
@@ -82,6 +88,7 @@ export class HealthService implements OnModuleDestroy {
       api: "connected",
       database,
       redis,
+      degraded: redis === "disconnected",
       environment: this.env.NODE_ENV,
       timestamp: new Date().toISOString(),
     };

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { EnvModule } from "./config/env.module";
+import { DemoModeGuard } from "./auth/guards/demo-mode.guard";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
@@ -57,6 +58,14 @@ const GLOBAL_THROTTLE = {
     QuestsModule,
     ReportsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Module 10.4 / ADR 0004: default-deny mutation guard, active only
+    // when DEMO_MODE=true. Global so it covers every controller,
+    // including ones added later, without each needing its own
+    // @UseGuards -- see DemoModeGuard's own doc comment for why this
+    // is a global allowlist rather than a per-route denylist.
+    { provide: APP_GUARD, useClass: DemoModeGuard },
+  ],
 })
 export class AppModule {}

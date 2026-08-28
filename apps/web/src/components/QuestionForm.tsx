@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { Button, Input, Select, Tag } from "@questlearn/design-system";
 import { FormField } from "@/components/FormField";
+import { DemoModeAction } from "@/components/DemoModeAction";
 import { QuestionOption, QuestionPayload, QuestionType } from "@/lib/api";
 
 const TYPE_LABELS: Record<QuestionType, string> = {
@@ -353,9 +354,11 @@ export function QuestionForm({
         <Input id="explanation" multiline rows={2} value={value.explanation} onChange={(v) => set("explanation", v)} />
       </FormField>
 
-      <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-        {submitting ? "Saving…" : submitLabel}
-      </Button>
+      <DemoModeAction>
+        <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+          {submitting ? "Saving…" : submitLabel}
+        </Button>
+      </DemoModeAction>
     </form>
   );
 }

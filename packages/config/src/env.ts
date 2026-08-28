@@ -58,6 +58,18 @@ export const envSchema = z.object({
   // loosening the limit anyone actually deployed relies on.
   GLOBAL_THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
   GLOBAL_THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60_000),
+
+  // Module 10.4 / ADR 0004: when "true", DemoModeGuard rejects every
+  // POST/PATCH/DELETE except /auth/login, /auth/refresh, /auth/logout.
+  // Deliberately NOT z.coerce.boolean() -- that treats any non-empty
+  // string (including the literal string "false") as true, which
+  // would make an explicit DEMO_MODE=false in a deployment's env
+  // silently turn demo mode ON. Only the literal string "true" enables it.
+  DEMO_MODE: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type Env = z.infer<typeof envSchema>;

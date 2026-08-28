@@ -20,7 +20,7 @@ describe("AuthService", () => {
   let prisma: {
     user: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock; create: jest.Mock; update: jest.Mock };
     tenant: { create: jest.Mock };
-    session: { create: jest.Mock };
+    session: { create: jest.Mock; deleteMany: jest.Mock };
     verificationToken: { create: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -35,9 +35,16 @@ describe("AuthService", () => {
         update: jest.fn(),
       },
       tenant: { create: jest.fn() },
-      session: { create: jest.fn() },
+      session: { create: jest.fn(), deleteMany: jest.fn() },
       verificationToken: { create: jest.fn() },
-      $transaction: jest.fn(),
+      // Module 10.4: issueSession now wraps its prune-then-create in
+      // $transaction([...]) (the array form, not the callback form
+      // register() uses above) -- default this to actually resolving
+      // an array so `await this.prisma.$transaction([...])` in
+      // issueSession doesn't hang on an unconfigured mock. Individual
+      // register()/verifyEmail() tests below still override this with
+      // their own callback-style mockImplementationOnce as needed.
+      $transaction: jest.fn().mockResolvedValue([]),
     };
     emailService = {
       sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
