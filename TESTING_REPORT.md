@@ -380,12 +380,12 @@ anything there.
   entry instead of `[]` in the non-static-demo build too — the same
   never-return-a-literal-empty-array rule already applied to the
   static-demo build, now applied everywhere, with no `dynamicParams`
-  export needed at all. Verified: both build variants succeed, the
-  full local e2e suite is back to 47/48 (only the pre-existing
-  `reports.spec.ts` flake), and the fix is pushed to PR #20 pending a
-  final confirming CI run. The temporary diagnostic-log upload step in
-  `ci.yml` and the (now-superseded, harmless-but-unnecessary) warm-up
-  step should both be removed once that run confirms green.
+  export needed at all. Verified: both build variants succeed locally,
+  the full local e2e suite is back to 47/48 (only the pre-existing
+  `reports.spec.ts` flake), and **the confirming CI run on PR #20 is
+  fully green, 48/48, 3m24s** — the first clean run since this
+  anomaly started. The now-superseded warm-up step and the temporary
+  diagnostic-log upload step have been removed from `ci.yml`.
 
 - **Both build variants, real builds this session**: `next build`
   (default, `NEXT_PUBLIC_API_URL` pointed at a real local API) — 26

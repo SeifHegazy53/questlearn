@@ -119,52 +119,6 @@ jobs:
         run: |
           npx wait-on http://localhost:4000/health http://localhost:3000/ --timeout 60000
 
-      - name: Warm up dynamic routes
-        # Found via a real CI investigation (Module 10.5's PR #20): every
-        # test that creates a resource and then loads ITS OWN dynamic
-        # detail page (/classes/[id], /activities/[id], /questions/[id],
-        # /quests/[id], etc.) deterministically timed out against a real
-        # GitHub-hosted runner three separate times, at the exact same
-        # 5s/30s boundaries, with byte-for-byte identical timing across
-        # runs -- while an exhaustive from-scratch reproduction (a real
-        # Ubuntu container, same Node version, same fresh build, same
-        # fresh seeded DB, even capped to the runner's own 2 vCPU/7GB)
-        # could not reproduce it even once. The static/list pages (which
-        # never hit this) and the DB itself (309 Jest tests against the
-        # same Postgres, seconds earlier, all fast) were both proven
-        # healthy, narrowing this to something about the FIRST render of
-        # each dynamic route specifically on that infrastructure -- most
-        # plausibly the on-demand fallback render (dynamicParams:true;
-        # every one of these routes' generateStaticParams legitimately
-        # returns [] outside the static-demo build) compiling and
-        # rendering for the first time exactly when a tight 5s/30s
-        # Playwright timeout is also running, on a runner whose
-        # characteristics an isolated container test doesn't reproduce.
-        # A bogus id still exercises the exact same route module load +
-        # compile + fallback-render path a real id would (it just 404s
-        # instead of finding data) -- so hitting each route once here
-        # pays that first-render cost outside any test's own budget.
-        # `|| true` throughout: a 404/error response is the expected,
-        # fine outcome: the request itself, not its result, is the point.
-        run: |
-          for path in \
-            /activities/warmup \
-            /activities/warmup/assign \
-            /activities/warmup/preview \
-            /activities/warmup/report \
-            /assignments/warmup/attempt \
-            /attempts/warmup/result \
-            /classes/warmup \
-            /classes/warmup/learners/warmup/report \
-            /classes/warmup/mastery \
-            /classes/warmup/report \
-            /questions/warmup \
-            /questions/warmup/edit \
-            /quests/warmup \
-          ; do
-            curl -s -o /dev/null "http://localhost:3000${path}" || true
-          done
-
       - name: Playwright auth flow
         run: pnpm --filter @questlearn/web exec playwright test
         env:
@@ -176,21 +130,3 @@ jobs:
         with:
           name: screenshots
           path: docs/screenshots/
-
-      # Temporary diagnostic upload for the CI anomaly under
-      # investigation on PR #20 (see TESTING_REPORT.md's Module 10.5
-      # section) -- server logs and Playwright's own traces/network
-      # capture aren't visible in the plain job log at all, and the
-      # warm-up step (above) didn't change the failure, which rules
-      # out compile/first-render cost and points at something in the
-      # actual request/response for a freshly created resource. To be
-      # removed once the real mechanism is found and fixed.
-      - name: Upload diagnostic logs and traces
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-anomaly-diagnostics
-          path: |
-            apps/api/dev.log
-            apps/web/web.log
-            apps/web/test-results/
