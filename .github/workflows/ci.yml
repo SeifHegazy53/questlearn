@@ -176,3 +176,21 @@ jobs:
         with:
           name: screenshots
           path: docs/screenshots/
+
+      # Temporary diagnostic upload for the CI anomaly under
+      # investigation on PR #20 (see TESTING_REPORT.md's Module 10.5
+      # section) -- server logs and Playwright's own traces/network
+      # capture aren't visible in the plain job log at all, and the
+      # warm-up step (above) didn't change the failure, which rules
+      # out compile/first-render cost and points at something in the
+      # actual request/response for a freshly created resource. To be
+      # removed once the real mechanism is found and fixed.
+      - name: Upload diagnostic logs and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-anomaly-diagnostics
+          path: |
+            apps/api/dev.log
+            apps/web/web.log
+            apps/web/test-results/
