@@ -3,14 +3,16 @@ export interface SelectProps {
   value?: string;
   onChange?: (value: string) => void;
   size?: 'sm' | 'md';
+  disabled?: boolean;
 }
 
-export function Select({ options = [], value, onChange, size = 'md' }: SelectProps) {
+export function Select({ options = [], value, onChange, size = 'md', disabled }: SelectProps) {
   const height = size === 'sm' ? 32 : 40;
   return (
     <select
       value={value}
       onChange={(e) => onChange && onChange(e.target.value)}
+      disabled={disabled}
       style={{
         height,
         padding: '0 32px 0 12px',
@@ -26,6 +28,8 @@ export function Select({ options = [], value, onChange, size = 'md' }: SelectPro
           "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%237B7797'/></svg>\")",
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'right 12px center',
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       {options.map((opt) => (

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge, Button, StatCard } from "@questlearn/design-system";
 import { useAuth } from "@/lib/auth-context";
 import { LearnerAssignment, listMyAssignments } from "@/lib/api";
+import { IS_STATIC_DEMO } from "@/lib/demo-mode";
 
 function statusLabel(assignment: LearnerAssignment): { text: string; tone: "neutral" | "onTrack" | "needsSupport" } {
   if (!assignment.attempt) return { text: "Not started", tone: "neutral" };
@@ -97,42 +98,59 @@ function LearnerDashboard({ name, email, onLogout }: { name: string; email: stri
         <ul data-testid="learner-assignments-list" style={{ listStyle: "none", padding: 0, maxWidth: 640 }}>
           {assignments.map((a) => {
             const { text, tone } = statusLabel(a);
-            const href =
-              a.attempt?.status === "submitted"
-                ? `/attempts/${a.attempt.id}/result`
-                : `/assignments/${a.id}/attempt`;
+            const isSubmitted = a.attempt?.status === "submitted";
+            // /attempts/[id]/result is read-only and included in the
+            // static demo's navigation; /assignments/[id]/attempt is
+            // the real answering flow (autosave, submit) and stays
+            // excluded, same as every other mutation-only page (see
+            // ADR 0005). No assignment in the demo's mock data is
+            // ever "not started"/"in progress" -- this guard exists
+            // so a future data change can't silently reopen a dead
+            // link to an excluded page, same failure mode found and
+            // fixed for the result page itself.
+            const linkable = isSubmitted || !IS_STATIC_DEMO;
+            const href = isSubmitted ? `/attempts/${a.attempt!.id}/result` : `/assignments/${a.id}/attempt`;
+            const rowStyle = {
+              display: "flex" as const,
+              justifyContent: "space-between" as const,
+              alignItems: "center" as const,
+              gap: 12,
+              textDecoration: "none",
+              color: "inherit",
+              background: "var(--surface-card)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-card)",
+              padding: 16,
+            };
+            const content = (
+              <>
+                <div>
+                  <p style={{ margin: 0, fontSize: 15, color: "var(--text-primary)" }}>{a.activity.title}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
+                    {a.class.name} · Due {new Date(a.dueAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {a.attempt?.status === "submitted" && a.attempt.score !== null && (
+                    <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                      {Math.round(a.attempt.score * 100)}%
+                    </span>
+                  )}
+                  <Badge tone={tone}>{text}</Badge>
+                </div>
+              </>
+            );
             return (
               <li key={a.id} data-testid="learner-assignment-row" style={{ marginBottom: 10 }}>
-                <Link
-                  href={href}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                    textDecoration: "none",
-                    color: "inherit",
-                    background: "var(--surface-card)",
-                    borderRadius: "var(--radius-lg)",
-                    boxShadow: "var(--shadow-card)",
-                    padding: 16,
-                  }}
-                >
-                  <div>
-                    <p style={{ margin: 0, fontSize: 15, color: "var(--text-primary)" }}>{a.activity.title}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
-                      {a.class.name} · Due {new Date(a.dueAt).toLocaleDateString()}
-                    </p>
+                {linkable ? (
+                  <Link href={href} style={rowStyle}>
+                    {content}
+                  </Link>
+                ) : (
+                  <div style={rowStyle} title="Not available in the static demo.">
+                    {content}
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {a.attempt?.status === "submitted" && a.attempt.score !== null && (
-                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                        {Math.round(a.attempt.score * 100)}%
-                      </span>
-                    )}
-                    <Badge tone={tone}>{text}</Badge>
-                  </div>
-                </Link>
+                )}
               </li>
             );
           })}

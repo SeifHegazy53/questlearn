@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 export interface TagProps {
   children: ReactNode;
   onRemove?: () => void;
+  disabled?: boolean;
 }
 
-export function Tag({ children, onRemove }: TagProps) {
+export function Tag({ children, onRemove, disabled }: TagProps) {
   return (
     <span
       style={{
@@ -26,6 +27,7 @@ export function Tag({ children, onRemove }: TagProps) {
         <button
           type="button"
           onClick={onRemove}
+          disabled={disabled}
           aria-label="Remove"
           style={{
             appearance: 'none',
@@ -33,11 +35,12 @@ export function Tag({ children, onRemove }: TagProps) {
             background: 'none',
             padding: 0,
             display: 'inline-flex',
-            cursor: 'pointer',
+            cursor: disabled ? 'not-allowed' : 'pointer',
             color: 'var(--gray-500)',
             fontSize: 14,
             lineHeight: 1,
             fontFamily: 'inherit',
+            opacity: disabled ? 0.5 : 1,
           }}
         >
           ×

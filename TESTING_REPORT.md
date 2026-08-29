@@ -325,7 +325,104 @@ suite.
   (defense in depth: the guard is the actual enforcement, the frontend
   wrapper is a UX layer on top of it), just without the same
   proactive "disabled, here's why" treatment yet. Worth a follow-up
-  pass if broader frontend coverage is wanted.
+  pass if broader frontend coverage is wanted. **Update, Module 10.5**:
+  the concept-tagging and quest-step-management half of this gap is
+  closed — see that module's section below. `DemoModeAction` now wraps
+  both, in the shared page source both builds use, so this build gets
+  the same proactive treatment as a side effect. Attempt start/submit
+  remains unwrapped (that page stays excluded from the static demo
+  entirely, see below), still safely blocked server-side here.
+
+## Module 10.5 — Static Mock Frontend Demo
+
+Full decision record: `docs/adr/0005-static-mock-frontend-demo.md`.
+This module is frontend-only and additive: Module 10.4's live-backend
+deployment path is untouched, and `apps/api`'s suite (below) is run
+unmodified as a regression check, not because this module changed
+anything there.
+
+- **Both build variants, real builds this session**: `next build`
+  (default, `NEXT_PUBLIC_API_URL` pointed at a real local API) — 26
+  routes, succeeds, no static-demo artifacts leak in (dynamic routes
+  whose `generateStaticParams` is gated behind `STATIC_DEMO=true`
+  correctly return `[]` and generate nothing extra). `next build`
+  with `STATIC_DEMO=true NEXT_PUBLIC_STATIC_DEMO=true` — 46 routes,
+  succeeds, `output: "export"` produces a working static `out/`
+  directory. Both verified by actually running the build, not by
+  reading `next.config.js` and assuming.
+- **Full API suite unaffected**: `pnpm --filter @questlearn/api test`
+  — **36 suites, 309 tests, all pass**, run twice this session (an
+  intermediate run's 129 failures were traced to Docker Desktop's
+  daemon having gone down between sessions — an environment outage,
+  not a code issue — confirmed by `docker ps` failing to reach the
+  daemon, restarting it, and the identical suite passing clean
+  immediately after).
+- **Full e2e suite, both variants**: `pnpm --filter @questlearn/web
+  e2e` (Playwright, 48 tests, against the default build, real API on
+  a real port) — **47/48 pass**, the one failure being
+  `reports.spec.ts`'s "screenshots" test, a **pre-existing flake
+  independently reproduced against fully unmodified code** (`git
+  stash` applied, zero Module 10.5 changes present, same single test
+  timed out at the identical spot) — not a regression from this
+  module, not fixed here as it's out of scope. Run a second time after
+  every fix in this module's correctness pass (design-system,
+  dashboard, demo-mode changes) to confirm zero additional regressions
+  — same 47/48 result both times.
+- **The static-demo build's correctness was verified by actually
+  driving the built export in a browser** (serving the real `out/`
+  directory under its real `/questlearn` base path locally), not by
+  reasoning about the source — this caught three real bugs a
+  read-through of the diff would not have:
+  1. Every mutating control reachable on an included page threw an
+     unhandled promise rejection with zero user feedback on click
+     (`NOT_WIRED`'s throw, uncaught). Fixed by extending `DEMO_MODE`
+     to cover the static-demo build so `DemoModeAction` disables them
+     — see ADR 0005 for the full list of controls found and fixed
+     (roster remove/rename/rotate/add, activity publish/archive/
+     question add-remove-reorder, question archive, concept tag
+     add/remove, every quest-builder step control).
+  2. Layout-level `DemoModeBanner` (a `DEMO_MODE`-gated component
+     reused as a side effect of fix #1) told static-demo visitors to
+     "sign in with the seeded demo teacher or learner account" — a
+     login flow that does not exist in this build (there's only the
+     `/demo` role-picker). Fixed with build-specific copy
+     (`IS_STATIC_DEMO` branch in `DemoModeBanner.tsx`).
+  3. Three included pages linked, with a real seeded id, into pages
+     only statically generated for a placeholder `id: "unused"` —
+     Question detail's "Edit", Activity detail's "Preview"/"Assign",
+     and every submitted-assignment row on the learner dashboard —
+     confirmed as real 404s by navigating to the built URLs directly.
+     Two of the destinations (`/attempts/[id]/result`,
+     `/classes/[id]/learners/[learnerId]/report`) turned out to be
+     entirely read-only on inspection and were un-excluded instead —
+     given real `generateStaticParams`, and their `mock-api.ts` stubs
+     wired to real derived mock data instead of `NOT_WIRED` — since
+     hiding a link to content that could legitimately be shown would
+     have been a worse fix than showing it. The remaining
+     mutation-only destinations (question edit, activity preview/
+     assign) keep their links, but as the same disabled-with-tooltip
+     control every other demo-blocked action uses, not a link to
+     nowhere.
+- **`Select`/`Tag` design-system change, verified not to affect any
+  other consumer**: both gained an optional `disabled` prop (default
+  falsy, fully backward-compatible) to make fix #1 above actually
+  work — `DemoModeAction`'s clone-with-`disabled:true` approach is a
+  no-op against a component that doesn't accept the prop, which the
+  first attempt at this fix silently was (caught by re-inspecting the
+  built export's DOM state, not by re-reading the diff). `QuestionForm`
+  (the accepted-answers `Tag` picker) and the assign-activity form
+  (its class-picker `Select`) are `Select`/`Tag`'s only other
+  consumers; both were rebuilt and their pages re-verified working
+  (`questions.spec.ts`, `assignments-attempts.spec.ts` e2e both still
+  pass) after the change.
+- **Mock data's numeric/textual accuracy, spot-checked against the
+  built export, not just the source file**: class mastery (Solar
+  System Basics 98%, matching the real seeded `0.9750000014516972`
+  score's rounding), gamification (130 XP, Level 2, 30/200 into next
+  level), and the three learner assignment scores (50%, 100%, 100%)
+  all confirmed rendering correctly by loading the actual pages in a
+  browser and reading the DOM, not by asserting the mock data file
+  looks right.
 
 ## Known testing gaps
 
