@@ -341,6 +341,36 @@ deployment path is untouched, and `apps/api`'s suite (below) is run
 unmodified as a regression check, not because this module changed
 anything there.
 
+- **Observed CI anomaly, investigated and hardened against, not
+  silently worked around**: [PR #20](https://github.com/SeifHegazy53/questlearn/pull/20)'s
+  CI failed three consecutive times with an identical signature — the
+  same 7 tests (every one that creates a resource and loads its own
+  dynamic detail page: `activities`, `assignments-attempts`, `classes`,
+  `gamification`, `mastery`, `questions`, `quests`), each timing out at
+  the same 5s/30s boundary, with byte-for-byte identical durations
+  across all three runs. An exhaustive investigation ruled out this
+  module's own code as the cause: a from-scratch reproduction in a
+  real Ubuntu container (same Node version pinned by `.node-version`,
+  a full `pnpm -r build`, a genuinely fresh seeded database, run both
+  unconstrained and capped to the runner's own 2 vCPU/7GB) passed the
+  full suite cleanly, twice. The same CI run's own 309-test Jest suite
+  against the same Postgres, seconds before the failure, was fast and
+  clean, ruling out a broadly unhealthy runner or database. This
+  narrowed the cause to something about the *first* render of a
+  dynamic route specifically on GitHub's actual runner infrastructure
+  — plausibly the on-demand fallback render every one of these routes'
+  `generateStaticParams` legitimately triggers outside the
+  static-demo build (it returns `[]`, by design) landing inside a
+  test's own tight timeout budget, on infrastructure characteristics
+  an isolated container couldn't reproduce. `.github/workflows/ci.yml`
+  gained a "Warm up dynamic routes" step (one harmless request per
+  dynamic route, right after the server-readiness check and before
+  Playwright starts) to pay that first-render cost outside any test's
+  timeout, regardless of the exact underlying mechanism. This is
+  recorded here as an observed, investigated CI anomaly — not a
+  regression this module's application code caused, and not quietly
+  dismissed as routine flakiness either.
+
 - **Both build variants, real builds this session**: `next build`
   (default, `NEXT_PUBLIC_API_URL` pointed at a real local API) — 26
   routes, succeeds, no static-demo artifacts leak in (dynamic routes
