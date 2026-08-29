@@ -341,35 +341,51 @@ deployment path is untouched, and `apps/api`'s suite (below) is run
 unmodified as a regression check, not because this module changed
 anything there.
 
-- **Observed CI anomaly, investigated and hardened against, not
-  silently worked around**: [PR #20](https://github.com/SeifHegazy53/questlearn/pull/20)'s
+- **Observed CI anomaly, root-caused, real fix landed** (not a
+  workaround, not silently dismissed as flakiness): [PR #20](https://github.com/SeifHegazy53/questlearn/pull/20)'s
   CI failed three consecutive times with an identical signature — the
-  same 7 tests (every one that creates a resource and loads its own
+  same 8 tests (every one that creates a resource and loads its own
   dynamic detail page: `activities`, `assignments-attempts`, `classes`,
-  `gamification`, `mastery`, `questions`, `quests`), each timing out at
-  the same 5s/30s boundary, with byte-for-byte identical durations
-  across all three runs. An exhaustive investigation ruled out this
-  module's own code as the cause: a from-scratch reproduction in a
-  real Ubuntu container (same Node version pinned by `.node-version`,
-  a full `pnpm -r build`, a genuinely fresh seeded database, run both
-  unconstrained and capped to the runner's own 2 vCPU/7GB) passed the
-  full suite cleanly, twice. The same CI run's own 309-test Jest suite
-  against the same Postgres, seconds before the failure, was fast and
-  clean, ruling out a broadly unhealthy runner or database. This
-  narrowed the cause to something about the *first* render of a
-  dynamic route specifically on GitHub's actual runner infrastructure
-  — plausibly the on-demand fallback render every one of these routes'
-  `generateStaticParams` legitimately triggers outside the
-  static-demo build (it returns `[]`, by design) landing inside a
-  test's own tight timeout budget, on infrastructure characteristics
-  an isolated container couldn't reproduce. `.github/workflows/ci.yml`
-  gained a "Warm up dynamic routes" step (one harmless request per
-  dynamic route, right after the server-readiness check and before
-  Playwright starts) to pay that first-render cost outside any test's
-  timeout, regardless of the exact underlying mechanism. This is
-  recorded here as an observed, investigated CI anomaly — not a
-  regression this module's application code caused, and not quietly
-  dismissed as routine flakiness either.
+  `gamification`, `mastery`, `questions`, `quests`, `reports`), each
+  timing out at the same 5s/30s boundary, byte-for-byte identical
+  durations across all three runs. A from-scratch reproduction in a
+  real Ubuntu container (same Node version, full `pnpm -r build`, a
+  genuinely fresh seeded database, run both unconstrained and capped
+  to the runner's own 2 vCPU/7GB) passed cleanly every time, ruling
+  out this module's own application logic and general runner health
+  (the same run's own 309-test Jest suite against the same Postgres,
+  seconds earlier, was fast and clean). A first fix attempt — a
+  "warm up dynamic routes" CI step, on the theory that this was a
+  first-render/compile cost — made *zero* measurable difference on
+  the next run, which itself was informative: it ruled that theory
+  out. Capturing the actual server logs and Playwright traces from a
+  real CI run (a temporary diagnostic artifact upload, since neither
+  is visible in the plain job log) found the real cause: Next.js's
+  own internal `NoFallbackError`, thrown because every one of this
+  module's 13 dynamic-route wrapper pages returns a genuinely empty
+  array from `generateStaticParams()` outside the static-demo build —
+  the exact same bug class already known and worked around for
+  `output: "export"` (see the ADR), but this confirms it *also*
+  affects the plain server build under real GitHub Actions conditions
+  (never reproduced locally or in the from-scratch container, which
+  is this bug class's documented, maddening signature). `dynamicParams
+  = true` was tried first as the documented Next.js fix but rejected
+  at build time under `output: "export"` (`"dynamicParams: true"
+  cannot be used with "output: export"`, and Next's route-config
+  parser only accepts literal AST values — a computed
+  `process.env.STATIC_DEMO !== "true"` expression fails with
+  `Unsupported node type "BinaryExpression"`, so the value can't even
+  be conditioned per build in one file). The real fix: every wrapper's
+  `generateStaticParams()` now returns a placeholder `{ id: "unused" }`
+  entry instead of `[]` in the non-static-demo build too — the same
+  never-return-a-literal-empty-array rule already applied to the
+  static-demo build, now applied everywhere, with no `dynamicParams`
+  export needed at all. Verified: both build variants succeed, the
+  full local e2e suite is back to 47/48 (only the pre-existing
+  `reports.spec.ts` flake), and the fix is pushed to PR #20 pending a
+  final confirming CI run. The temporary diagnostic-log upload step in
+  `ci.yml` and the (now-superseded, harmless-but-unnecessary) warm-up
+  step should both be removed once that run confirms green.
 
 - **Both build variants, real builds this session**: `next build`
   (default, `NEXT_PUBLIC_API_URL` pointed at a real local API) — 26

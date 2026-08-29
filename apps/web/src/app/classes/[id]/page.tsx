@@ -4,15 +4,14 @@
 // (moved verbatim to page-client.tsx -- "use client" pages can't
 // export generateStaticParams directly in this Next.js version,
 // confirmed by a real failed build attempt before adopting this
-// pattern). Returns [] outside the static-demo build, which is
-// functionally identical to this file not existing at all in every
-// other build (local dev, CI, Module 10.4's Docker image) -- nothing
-// about their runtime behavior changes.
+// pattern).
 import ClientPage from "./page-client";
 import { MOCK_CLASS_IDS } from "../../../lib/mock/mock-data";
 
+// Never return a literal [] from generateStaticParams -- see
+// activities/[id]/assign/page.tsx's comment.
 export async function generateStaticParams() {
-  if (process.env.STATIC_DEMO !== "true") return [];
+  if (process.env.STATIC_DEMO !== "true") return [{ id: "unused" }];
   return Object.values(MOCK_CLASS_IDS).map((id) => ({ id }));
 }
 

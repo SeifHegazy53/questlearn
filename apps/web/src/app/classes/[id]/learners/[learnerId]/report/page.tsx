@@ -12,8 +12,10 @@
 import ClientPage from "./page-client";
 import { MOCK_CLASS_IDS, MOCK_LEARNER } from "../../../../../../lib/mock/mock-data";
 
+// Never return a literal [] from generateStaticParams -- see
+// activities/[id]/assign/page.tsx's comment.
 export async function generateStaticParams() {
-  if (process.env.STATIC_DEMO !== "true") return [];
+  if (process.env.STATIC_DEMO !== "true") return [{ id: "unused", learnerId: "unused" }];
   return [{ id: MOCK_CLASS_IDS.earthScience, learnerId: MOCK_LEARNER.id }];
 }
 
