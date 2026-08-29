@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/lib/api": ["./src/lib/mock/mock-api.ts"],
+      "@/lib/auth-context": ["./src/lib/mock/mock-auth-context.tsx"],
+      "@/*": ["./src/*"]
+    }
+  }
+}

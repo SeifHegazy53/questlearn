@@ -16,28 +16,63 @@ The full product and engineering plan lives in
 
 ## Live Demo
 
-**[<demo URL — to be filled in once Render/Neon/Upstash are provisioned>](#)**
+**[Static demo — live now](https://seifhegazy53.github.io/questlearn/demo/)**
+(no backend, no login, no cold start — see
+[ADR 0005](./docs/adr/0005-static-mock-frontend-demo.md))
 
-This is a **read-only public demo**, running on Render's free tier
-(see [ADR 0004](./docs/adr/0004-zero-cost-portfolio-deployment.md) for
-the full zero-cost deployment design). A few things worth knowing
-before you click around:
+**Live-backend demo — code-complete, not yet reachable at a public URL**
+(see [ADR 0004](./docs/adr/0004-zero-cost-portfolio-deployment.md))
 
-- **Cold starts.** Render's free tier spins the instance down after a
-  period of inactivity — the first request after a while can take
-  10–30+ seconds while it wakes back up. Subsequent requests are fast.
-  This is a known, disclosed limitation of the free tier, not a bug.
-- **Sign in with the seeded demo accounts** shown on the login page
-  (one teacher, one learner) — self-registration and joining a class
-  as a new learner are both disabled in the demo.
+Two independent, intentionally different demos exist because every
+$0-and-no-card-required backend host checked (Render, Fly.io, Koyeb)
+now requires a card even on its free tier — confirmed live against
+Render's own API, not assumed from docs. Rather than accept that
+constraint or ask you to enter a card on this project's behalf, the
+static demo below is what's actually live today; the live-backend
+path stays fully built, tested, and ready to deploy as-is the moment
+a card-free host becomes available.
+
+### Static demo (live now)
+
+**[seifhegazy53.github.io/questlearn/demo](https://seifhegazy53.github.io/questlearn/demo/)**
+
+A static export of this same Next.js app — the real pages and
+components, unmodified — hosted on GitHub Pages, backed by
+deterministic mock data derived from the project's actual seed script
+(the same demo teacher/learner accounts, classes, questions, and the
+concept that genuinely reaches Mastered through 3 real graded
+attempts). A few things worth knowing before you click around:
+
+- **No login.** The landing page offers "View as Teacher" / "View as
+  Learner" — pick one and you're straight into the dashboard.
+- **No backend, so no cold start** — everything renders instantly from
+  bundled data, always.
 - **Everything is read-only.** Creating, editing, archiving, assigning,
   and submitting are all disabled — you'll see the relevant buttons
-  greyed out with an explanation, or (server-side, the actual
-  enforcement) get a clear `403` if you try to hit the API directly.
-  Every browsing flow — classes, questions, activities, mastery,
-  reports, XP, quests — works exactly as it would for a real user.
+  greyed out with an explanation. Unlike the live-backend demo below,
+  there's no server to enforce this against, so this build simply
+  never wires those buttons up to anything at all.
+- Not every route in the full app is covered — it's the read-only
+  browsing surface (dashboards, classes, questions, activities,
+  mastery, reports, gamification, quests, attempt results, learner
+  reports), not every mutation-only form. See ADR 0005 for the exact
+  list.
 - Want to try the full read/write app? Clone the repo and run it
   locally — see [Setup](#setup-clean-machine) below.
+
+### Live-backend demo (code-complete, blocked on hosting)
+
+The full NestJS + Postgres implementation — `Dockerfile.combined`,
+`DemoModeGuard`'s server-enforced read-only mode, session
+self-pruning, the `/health` degraded-mode contract — is built, tested,
+and provisioned up through Neon (Postgres) and Upstash (Redis), both
+live and verified. The one remaining piece, an actual public URL, is
+blocked on finding a backend host that doesn't require a card for a
+$0 deployment; deploying is a matter of pointing the existing GitHub
+Actions release workflow at one, with no further code changes. Once
+that's resolved, this section will gain a real link, with the same
+sign-in-as-seeded-accounts, `DemoModeGuard`-enforced read-only
+experience described in ADR 0004.
 
 **Contents:** [Live Demo](#live-demo) · [Status](#status) · [Architecture](#architecture) ·
 [Diagrams](#diagrams) · [Setup](#setup-clean-machine) ·
